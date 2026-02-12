@@ -1,30 +1,33 @@
 import os
 from flask import Flask, request, jsonify
 from groq import Groq
-from PyPDF2 import PdfReader # Importante añadir esta línea
+from PyPDF2 import PdfReader
 
 app = Flask(__name__)
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-# Función para extraer texto del PDF automáticamente
+# Esta función lee tu PDF automáticamente al iniciar el bot
 def obtener_conocimiento_pdf():
     try:
-        reader = PdfReader("informacion.pdf") # Tu PDF debe llamarse así en GitHub
+        reader = PdfReader("informacion.pdf")
         texto = ""
         for page in reader.pages:
             texto += page.extract_text()
         return texto
-    except:
+    except Exception as e:
+        print(f"Error leyendo PDF: {e}")
         return "Información general de Cabañas El Desván."
 
+# Guardamos la info del PDF en la memoria del bot
 CONOCIMIENTO_REAL = obtener_conocimiento_pdf()
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     datos = request.json
-    # Cambiamos "text" por "message" para que coincida con lo que configuramos en Typebot
-    mensaje_usuario = datos.get("message", "").lower() 
+    # Usamos "message" para que coincida con tu Typebot
+    mensaje_usuario = datos.get("message", "").lower()
     
+    # Palabras clave para derivar a la dueña
     disparadores_humano = ["reservar", "reserva", "dueña", "pagar", "transferencia", "hablar con alguien"]
     
     if any(p in mensaje_usuario for p in disparadores_humano):
@@ -38,12 +41,11 @@ def webhook():
                 {"role": "system", "content": f"Eres el asistente de Cabañas El Desván. Responde de forma mágica y acogedora usando esto: {CONOCIMIENTO_REAL}. Si no sabes algo, di: 'Lo siento, no tengo esa información. Presiona aquí para hablar con la dueña: https://wa.me/56961688761'"},
                 {"role": "user", "content": mensaje_usuario}
             ],
-            model="llama-3.3-70b-versatile", # Usamos el modelo más potente
+            model="llama-3.3-70b-versatile",
         )
         return jsonify({"reply": completion.choices[0].message.content})
-    except Exception as e:
-        return jsonify({"reply": "Lo siento, tengo un problema técnico momentáneo."})
+    except:
+        return jsonify({"reply": "Lo siento, tengo un problema técnico momentáneo. Por favor contacta a la dueña directamente."})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
